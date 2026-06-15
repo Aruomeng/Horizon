@@ -1,16 +1,16 @@
 name: Daily Horizon Summary
 
 on:
-  # schedule:
-  #   - cron: '0 0 */2 * *'  # Runs every 2 days at 00:00 UTC
-  #     timezone: 'Asia/Shanghai'
-  workflow_dispatch:      # Allow manual trigger
+  schedule:
+    - cron: '30 0 * * *'  # 每天北京时间 8:30 运行
+      timezone: 'Asia/Shanghai'
+  workflow_dispatch:      # 支持手动触发
 
 jobs:
   daily-summary:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Needed to commit changes
+      contents: write
 
     steps:
       - name: Checkout code
@@ -24,23 +24,25 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v3
 
-      - name: Install dependencies
-        run: uv sync
+      - name: Install dependencies (with Twitter support)
+        run: uv sync --extra twitter
 
-      - name: Prepare GitHub Actions config
+      - name: Install Playwright Chromium
+        run: uv run playwright install chromium
+
+      - name: Write Twitter cookie from secret
+        run: echo '${{ secrets.TWITTER_COOKIE }}' > /tmp/x_cookies_1.json
+
+      - name: Prepare config
         run: cp data/config.github.json data/config.json
 
       - name: Run Horizon
         env:
-          # Map secrets to environment variables expected by config.json
-          # Modify these based on your data/config.github.json provider settings
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           LWN_KEY: ${{ secrets.LWN_KEY }}
         run: uv run horizon --hours 48
 
-      - name: Set current date as environment variable
+      - name: Set current date as env
         run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
 
       - name: Deploy to GitHub Pages
@@ -48,7 +50,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs
-          keep_files: true  # Keep existing summaries on gh-pages branch
+          keep_files: true
           commit_message: "📝 Daily Summary: ${{ env.DATE }}"
           publish_branch: gh-pages
           enable_jekyll: true
